@@ -1,10 +1,13 @@
-from django.http import JsonResponse
-from django.templatetags.static import static
 import json
 
+from django.http import JsonResponse
+from django.templatetags.static import static
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from .models import Product, Order, OrderItem
 
 
+@api_view(['GET'])
 def banners_list_api(request):
     # FIXME move data to db?
     return JsonResponse([
@@ -29,6 +32,7 @@ def banners_list_api(request):
     })
 
 
+@api_view(['GET', 'POST'])
 def product_list_api(request):
     products = Product.objects.select_related('category').available()
 
@@ -57,10 +61,14 @@ def product_list_api(request):
     })
 
 
+@api_view(['GET', 'POST'])
 def register_order(request):
-    try:
-        order_info=json.loads(request.body.decode())
+    if request.method == 'GET':
+        return Response({'info': 'Здесь нужно отправлять POST-запрос с заказом в JSON-формате.'})
 
+    order_info = request.data
+
+    try:
         first_name = order_info.get('firstname')
         last_name = order_info.get('lastname')
         phone = order_info.get('phonenumber')
@@ -68,7 +76,7 @@ def register_order(request):
         products = order_info.get('products')
 
     except ValueError as e:
-        return JsonResponse({
+        return Response({
             'error': f'Ошибка: {e}'
         })
 
@@ -89,4 +97,4 @@ def register_order(request):
             product=product,
             quantity=quantity
         )
-    return JsonResponse({})
+    return Response({})
