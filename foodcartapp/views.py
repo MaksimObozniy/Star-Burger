@@ -1,10 +1,11 @@
 import json
 
+import phonenumbers
 from django.http import JsonResponse
 from django.templatetags.static import static
+from .models import Product, Order, OrderItem
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Product, Order, OrderItem
 
 
 @api_view(['GET'])
@@ -67,7 +68,7 @@ def validate_products(products):
         return {'products': 'Это поле не может быть пустым.'}
 
     if not isinstance(products, list):
-        return {'products': f'Ожидался list со значениями, но был получен str.'}
+        return {'products': 'Поле должно быть списком'}
 
     if not products:
         return {'products': 'Этот список не может быть пустым.'}
@@ -86,7 +87,7 @@ def validate_products(products):
             return {'products': "Поле product должно содержать целочисленный идентификатор"}
 
         if not Product.objects.filter(id=item['product']).exists():
-            return {'products': f"Продукт с id={item['product']} не существует"}
+            return {'products': f"Недопустимы первичный ключ '{item['product']}' "}
 
     return None
 
@@ -94,39 +95,58 @@ def validate_products(products):
 @api_view(['GET', 'POST'])
 def register_order(request):
 
-    if request.method == 'GET':
-        return Response({'info': 'Здесь нужно отправлять POST-запрос с заказом в JSON-формате.'})
-
     order_info = request.data
+    errors = {}
 
     if 'products' not in order_info:
-        return Response({'products': 'Поле products является обязательным для заполненияю'}, status=400)
+        errors['products'] = 'Обязательное поле'
+    else:
+        product_errors = validate_products(order_info['products'])
+        if product_errors:
+            errors.update(product_errors)
 
-    first_name = order_info.get('firstname')
-    last_name = order_info.get('lastname')
+    required_fields = {
+        'firstname': 'Это поле обязательно для заполнения',
+        'lastname': 'Это поле обязательно для заполнения',
+        'phonenumber': 'Это поле обязательно для заполнения',
+        'address': 'Это поле обязательно для заполнения'
+    }
+
+    for field in required_fields:
+        if field not in order_info:
+            errors[field] = 'Обязательное поле '
+        else:
+            value = order_info[field]
+            if value is None or (isinstance(value, str) and not value.strip()):
+                errors[field] = 'Это поле не может быть пустым.'
+            elif not isinstance(value, str):
+                errors[field] = 'Not a valid string.'
+
     phone = order_info.get('phonenumber')
-    address = order_info.get('address')
-    products = order_info.get('products')
+    if isinstance(phone, str) and phone.strip():
+        try:
+            number = phonenumbers.parse(phone, 'RU')
+            if not phonenumbers.is_valid_number(number):
+                errors['phonenumber'] = 'Введен некорректный номер телефона.'
+        except phonenumbers.NumberParseException:
+            errors['phonenumber'] = 'Введен некорректный номер телефона.'
 
-    error = validate_products(products)
-    if error:
-        return Response(error, status=400)
+    if errors:
+        return Response(errors, status=400)
 
     order = Order.objects.create(
-        first_name=first_name,
-        last_name=last_name,
-        phone_number=phone,
-        address=address
+        first_name=order_info['firstname'],
+        last_name=order_info['last_name'],
+        phone_number=order_info['phonenumber'],
+        address=order_info['address']
     )
 
-    for item in products:
-        product_id = item.get('product')
-        product = Product.objects.get(id=product_id)
-        quantity = item.get('quantity')
-
+    for item in order_info['products']:
+        product = Product.objects.get(id=item['product'])
         OrderItem.objects.create(
             order=order,
             product=product,
-            quantity=quantity
+            quantity=item['quantity']
         )
-    return Response({})
+
+    return Response({'status': 'ok'})
