@@ -61,24 +61,56 @@ def product_list_api(request):
     })
 
 
+def validate_products(products):
+
+    if products is None:
+        return {'products': 'Это поле не может быть пустым.'}
+
+    if not isinstance(products, list):
+        return {'products': f'Ожидался list со значениями, но был получен str.'}
+
+    if not products:
+        return {'products': 'Этот список не может быть пустым.'}
+
+    for item in products:
+        if not isinstance(item, dict):
+            return {'products': "Каждый элемент списка должен быть словарем."}
+
+        if 'product' not in item or 'quantity' not in item:
+            return {'products': "Каждая товарная позиция должна содержать 'продукт' и 'количество'"}
+
+        if not isinstance(item['quantity'], int) or item['quantity'] <= 0:
+            return {'products': "Поле quantity должно быть положительным целым числом."}
+
+        if not isinstance(item['product'], int):
+            return {'products': "Поле product должно содержать целочисленный идентификатор"}
+
+        if not Product.objects.filter(id=item['product']).exists():
+            return {'products': f"Продукт с id={item['product']} не существует"}
+
+    return None
+
+
 @api_view(['GET', 'POST'])
 def register_order(request):
+
     if request.method == 'GET':
         return Response({'info': 'Здесь нужно отправлять POST-запрос с заказом в JSON-формате.'})
 
     order_info = request.data
 
-    try:
-        first_name = order_info.get('firstname')
-        last_name = order_info.get('lastname')
-        phone = order_info.get('phonenumber')
-        address = order_info.get('address')
-        products = order_info.get('products')
+    if 'products' not in order_info:
+        return Response({'products': 'Поле products является обязательным для заполненияю'}, status=400)
 
-    except ValueError as e:
-        return Response({
-            'error': f'Ошибка: {e}'
-        })
+    first_name = order_info.get('firstname')
+    last_name = order_info.get('lastname')
+    phone = order_info.get('phonenumber')
+    address = order_info.get('address')
+    products = order_info.get('products')
+
+    error = validate_products(products)
+    if error:
+        return Response(error, status=400)
 
     order = Order.objects.create(
         first_name=first_name,

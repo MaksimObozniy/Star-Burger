@@ -137,8 +137,7 @@ class Order(models.Model):
 
     phone_number = PhoneNumberField(
         region='RU',
-        verbose_name='Телефон',
-        unique=True
+        verbose_name='Телефон'
 
     )
 
