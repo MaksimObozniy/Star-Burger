@@ -4,20 +4,8 @@ import phonenumbers
 
 
 class OrderItemSerializer(serializers.Serializer):
-    product = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(),
-        error_messages={
-            'required': 'Обязательное поле.',
-            'does_not_exist': 'Недопустимый первичный ключ',
-            'incorrect_type': 'Неверный тип значения.',
-        }
-    )
-    quantity = serializers.IntegerField(
-        error_messages={
-            'required': 'Обязательное поле.',
-            'invalid': 'Неверное значение количества.',
-        }
-    )
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    quantity = serializers.IntegerField(min_value=1)
 
     def validate_quantity(self, value):
         if value <= 0:
@@ -26,7 +14,10 @@ class OrderItemSerializer(serializers.Serializer):
 
 
 class OrderSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+
     firstname = serializers.CharField(
+        source='first_name',
         error_messages={
             'required': 'Обязательное поле.',
             'blank': 'Это поле не может быть пустым.',
@@ -35,6 +26,7 @@ class OrderSerializer(serializers.Serializer):
         }
     )
     lastname = serializers.CharField(
+         source='last_name',
         error_messages={
             'required': 'Обязательное поле.',
             'blank': 'Это поле не может быть пустым.',
@@ -43,6 +35,7 @@ class OrderSerializer(serializers.Serializer):
         }
     )
     phonenumber = serializers.CharField(
+         source='phone_number',
         error_messages={
             'required': 'Обязательное поле.',
             'blank': 'Это поле не может быть пустым.',
@@ -61,6 +54,7 @@ class OrderSerializer(serializers.Serializer):
     products = OrderItemSerializer(
         many=True,
         required=True,
+        write_only=True,
         error_messages={
             'required': 'Обязательное поле.',
             'null': 'Это поле не может быть пустым.',
@@ -80,19 +74,24 @@ class OrderSerializer(serializers.Serializer):
                 raise serializers.ValidationError('Введен некорректный номер телефона.')
         except phonenumbers.NumberParseException:
             raise serializers.ValidationError('Введен некорректный номер телефона.')
+
         return value
 
-    def create(self, validated_data):
+    def create(self, validated_info):
+        products_info = validated_info.pop('products')
+
         order = Order.objects.create(
-            first_name=validated_data['firstname'],
-            last_name=validated_data['lastname'],
-            phone_number=validated_data['phonenumber'],
-            address=validated_data['address']
+            first_name=validated_info['first_name'],
+            last_name=validated_info['last_name'],
+            phone_number=validated_info['phone_number'],
+            address=validated_info['address']
         )
-        for item in validated_data['products']:
+
+        for item in products_info:
             OrderItem.objects.create(
                 order=order,
                 product=item['product'],
                 quantity=item['quantity']
             )
+
         return order
